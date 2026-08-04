@@ -1,18 +1,18 @@
 /*
 	FILE: detector_node.cpp
 	--------------------------
-	Run detector node
+	Run detector node (ROS2)
 */
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <onboard_detector/dynamicDetector.h>
 
 int main(int argc, char** argv){
-	ros::init(argc, argv, "dyanmic_detector_node");
-	ros::NodeHandle nh;
+	rclcpp::init(argc, argv);
 
-	onboardDetector::dynamicDetector d (nh);
+	auto detector = std::make_shared<onboardDetector::dynamicDetector>();
 
-	ros::spin();
+	rclcpp::spin(detector);
+	rclcpp::shutdown();
 
 	return 0;
 }

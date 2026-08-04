@@ -6,7 +6,6 @@
 #ifndef ONBOARDDETECTOR_LIDARDETECTOR_H
 #define ONBOARDDETECTOR_LIDARDETECTOR_H
 
-#include <ros/ros.h>
 #include <onboard_detector/dbscan.h>
 #include <onboard_detector/utils.h>
 #include <pcl/point_cloud.h>

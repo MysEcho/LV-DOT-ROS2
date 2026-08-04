@@ -1,3 +1,15 @@
+# LV-DOT-ROS2: LiDAR-Visual Dynamic Obstacle Detection and Tracking (ROS2 Humble port)
+
+> **This fork is a ROS2 Humble port** of [Zhefan-Xu/LV-DOT](https://github.com/Zhefan-Xu/LV-DOT) (original: ROS1 Noetic).
+>
+> - Build: `colcon build --packages-select onboard_detector`
+> - Run: `ros2 launch onboard_detector run_detector.launch.py` (optional `config:=/path/to/params.yaml`)
+> - Configuration: `onboard_detector/cfg/detector_param.yaml`. A new **`lidar_only`** parameter (default `true`) runs the detector from LiDAR + odometry alone and disables the camera pipeline (depth/color/YOLO). Set it to `false` to enable LiDAR-visual fusion.
+> - Defaults pair a FAST-LIO2 stack: `lidar_pointcloud_topic: /cloud_registered_body` (body-frame undistorted cloud) + `odom_topic: /Odometry`, `body_to_lidar` identity, `localization_mode: 1`.
+> - Not yet ported to ROS2: the YOLO color detector (`onboard_detector/scripts/yolo_detector`, rospy) and the Gazebo `fakeDetector` (excluded from the build). LiDAR-only and the C++ pipeline are fully functional.
+>
+> Original README follows.
+
 # LV-DOT: LiDAR-Visual Dynamic Obstacle Detection and Tracking for Autonomous Robots
 [![ROS1](https://img.shields.io/badge/ROS1-Noetic-blue.svg)](https://wiki.ros.org/noetic)
 [![Linux platform](https://img.shields.io/badge/platform-Ubuntu-27AE60.svg)](https://releases.ubuntu.com/20.04/)

@@ -9,15 +9,16 @@
 #include <vector>
 #include <cmath>
 
-#define UNCLASSIFIED -1
-#define CORE_POINT 1
-#define BORDER_POINT 2
-#define NOISE -2
-#define SUCCESS 0
-#define FAILURE -3
-
 using namespace std;
 namespace onboardDetector{
+    // plain constants (previously #defines, which clashed with rclcpp enum members)
+    constexpr int UNCLASSIFIED = -1;
+    constexpr int CORE_POINT = 1;
+    constexpr int BORDER_POINT = 2;
+    constexpr int NOISE = -2;
+    constexpr int SUCCESS = 0;
+    constexpr int FAILURE = -3;
+
     typedef struct Point_
     {
         float x, y, z;  // X, Y, Z position

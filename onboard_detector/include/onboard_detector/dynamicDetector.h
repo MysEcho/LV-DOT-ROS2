@@ -1,22 +1,22 @@
 /*
     FILE: dynamicDetector.h
     ---------------------------------
-    header file of dynamic obstacle detector
+    header file of dynamic obstacle detector (ROS2 port)
 */
 #ifndef ONBOARDDETECTOR_DYNAMICDETECTOR_H
 #define ONBOARDDETECTOR_DYNAMICDETECTOR_H
 
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <Eigen/Eigen>
 #include <Eigen/StdVector>
 #include <cv_bridge/cv_bridge.h>
-#include <sensor_msgs/Image.h>
-#include <sensor_msgs/PointCloud2.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <nav_msgs/Odometry.h>
-#include <visualization_msgs/MarkerArray.h>
-#include <vision_msgs/Detection2DArray.h>
-#include <image_transport/image_transport.h>
+#include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/image_encodings.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
+#include <vision_msgs/msg/detection2_d_array.hpp>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -30,58 +30,58 @@
 #include <onboard_detector/lidarDetector.h>
 #include <onboard_detector/kalmanFilter.h>
 #include <onboard_detector/utils.h>
-#include <onboard_detector/GetDynamicObstacles.h>
+#include <onboard_detector/srv/get_dynamic_obstacles.hpp>
 
 namespace onboardDetector{
-    class dynamicDetector{
+    class dynamicDetector : public rclcpp::Node{
     private:
         std::string ns_;
         std::string hint_;
 
         // ROS
-        ros::NodeHandle nh_;
-        std::shared_ptr<message_filters::Subscriber<sensor_msgs::Image>> depthSub_;
-        std::shared_ptr<message_filters::Subscriber<sensor_msgs::PointCloud2>> lidarCloudSub_;
-        std::shared_ptr<message_filters::Subscriber<geometry_msgs::PoseStamped>> poseSub_;
-        typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, geometry_msgs::PoseStamped> depthPoseSync;
+        std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::Image>> depthSub_;
+        std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::PointCloud2>> lidarCloudSub_;
+        std::shared_ptr<message_filters::Subscriber<geometry_msgs::msg::PoseStamped>> poseSub_;
+        typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, geometry_msgs::msg::PoseStamped> depthPoseSync;
         std::shared_ptr<message_filters::Synchronizer<depthPoseSync>> depthPoseSync_;
-        typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::PointCloud2, geometry_msgs::PoseStamped> lidarPoseSync;
+        typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::PointCloud2, geometry_msgs::msg::PoseStamped> lidarPoseSync;
         std::shared_ptr<message_filters::Synchronizer<lidarPoseSync>> lidarPoseSync_;
-        std::shared_ptr<message_filters::Subscriber<nav_msgs::Odometry>> odomSub_;
-        typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, nav_msgs::Odometry> depthOdomSync;
+        std::shared_ptr<message_filters::Subscriber<nav_msgs::msg::Odometry>> odomSub_;
+        typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, nav_msgs::msg::Odometry> depthOdomSync;
         std::shared_ptr<message_filters::Synchronizer<depthOdomSync>> depthOdomSync_;
-        typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::PointCloud2, nav_msgs::Odometry> lidarOdomSync;
+        typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::PointCloud2, nav_msgs::msg::Odometry> lidarOdomSync;
         std::shared_ptr<message_filters::Synchronizer<lidarOdomSync>> lidarOdomSync_;
-        ros::Subscriber colorImgSub_;
-        ros::Subscriber yoloDetectionSub_;
-        ros::Timer detectionTimer_;
-        ros::Timer lidarDetectionTimer_;
-        ros::Timer trackingTimer_;
-        ros::Timer classificationTimer_;
-        ros::Timer visTimer_;
-        image_transport::Publisher uvDepthMapPub_;
-        image_transport::Publisher uDepthMapPub_;
-        image_transport::Publisher uvBirdViewPub_;
-        image_transport::Publisher detectedColorImgPub_;
-        ros::Publisher uvBBoxesPub_;
-        ros::Publisher dbBBoxesPub_;
-        ros::Publisher visualBBoxesPub_;
-        ros::Publisher lidarBBoxesPub_;
-        ros::Publisher filteredBBoxesBeforeYoloPub_;
-        ros::Publisher filteredBBoxesPub_;
-        ros::Publisher trackedBBoxesPub_;
-        ros::Publisher dynamicBBoxesPub_;
-        ros::Publisher filteredDepthPointsPub_;
-        ros::Publisher lidarClustersPub_;
-        ros::Publisher filteredPointsPub_;
-        ros::Publisher dynamicPointsPub_;
-        ros::Publisher rawDynamicPointsPub_;
-        ros::Publisher downSamplePointsPub_;
-        ros::Publisher rawLidarPointsPub_;
-        ros::Publisher historyTrajPub_;
-        ros::Publisher velVisPub_;
-        ros::ServiceServer getDynamicObstacleServer_;
-    
+        rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr colorImgSub_;
+        rclcpp::Subscription<vision_msgs::msg::Detection2DArray>::SharedPtr yoloDetectionSub_;
+        rclcpp::TimerBase::SharedPtr detectionTimer_;
+        rclcpp::TimerBase::SharedPtr lidarDetectionTimer_;
+        rclcpp::TimerBase::SharedPtr trackingTimer_;
+        rclcpp::TimerBase::SharedPtr classificationTimer_;
+        rclcpp::TimerBase::SharedPtr visTimer_;
+        rclcpp::TimerBase::SharedPtr sensorWarnTimer_;
+        rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr uvDepthMapPub_;
+        rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr uDepthMapPub_;
+        rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr uvBirdViewPub_;
+        rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr detectedColorImgPub_;
+        rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr uvBBoxesPub_;
+        rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr dbBBoxesPub_;
+        rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr visualBBoxesPub_;
+        rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr lidarBBoxesPub_;
+        rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr filteredBBoxesBeforeYoloPub_;
+        rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr filteredBBoxesPub_;
+        rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr trackedBBoxesPub_;
+        rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr dynamicBBoxesPub_;
+        rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr filteredDepthPointsPub_;
+        rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr lidarClustersPub_;
+        rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr filteredPointsPub_;
+        rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr dynamicPointsPub_;
+        rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr rawDynamicPointsPub_;
+        rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr downSamplePointsPub_;
+        rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr rawLidarPointsPub_;
+        rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr historyTrajPub_;
+        rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr velVisPub_;
+        rclcpp::Service<onboard_detector::srv::GetDynamicObstacles>::SharedPtr getDynamicObstacleServer_;
+
         // DETECTOR
         std::shared_ptr<onboardDetector::UVdetector> uvDetector_;
         std::shared_ptr<onboardDetector::DBSCAN> dbCluster_;
@@ -105,6 +105,9 @@ namespace onboardDetector{
         Eigen::Matrix4d body2Lidar_;
 
         // PARAMETETER
+        // Sensor mode
+        bool lidarOnly_; // true: LiDAR-only detection, camera pipeline (depth/color/YOLO) disabled
+
         // Topics
         int localizationMode_;
         std::string depthTopicName_;
@@ -119,12 +122,12 @@ namespace onboardDetector{
         // DBSCAN Common
         double groundHeight_;
         double roofHeight_;
-        
+
         // DBSCAN visual param
         double voxelOccThresh_;
         int dbMinPointsCluster_;
         double dbEpsilon_;
-        
+
         // DBSCAN LiDAR param
         int lidarDBMinPoints_;
         double lidarDBEpsilon_;
@@ -160,8 +163,8 @@ namespace onboardDetector{
 
         // Constrain size
         bool constrainSize_;
-        std::vector<Eigen::Vector3d> targetObjectSize_; 
-        Eigen::Vector3d maxObjectSize_; 
+        std::vector<Eigen::Vector3d> targetObjectSize_;
+        Eigen::Vector3d maxObjectSize_;
 
         // SENSOR DATA
         cv::Mat depthImage_;
@@ -173,13 +176,13 @@ namespace onboardDetector{
         Eigen::Matrix3d orientationColor_; // color camera orientation
         Eigen::Vector3d positionLidar_; // color camera position
         Eigen::Matrix3d orientationLidar_; // color camera orientation
-        bool hasSensorPose_;
+        bool hasSensorPose_ = false;
         Eigen::Vector3d localSensorRange_ {5.0, 5.0, 5.0};
         Eigen::Vector3d localLidarRange_ {10.0, 10.0, 5.0};
 
         //LIDAR DATA
-        sensor_msgs::PointCloud2ConstPtr latestCloud_;
-        pcl::PointCloud<pcl::PointXYZ>::Ptr lidarCloud_ = NULL; 
+        sensor_msgs::msg::PointCloud2::ConstSharedPtr latestCloud_;
+        pcl::PointCloud<pcl::PointXYZ>::Ptr lidarCloud_ = NULL;
         std::vector<onboardDetector::Cluster> lidarClusters_;
 
         // DETECTOR DATA
@@ -191,7 +194,7 @@ namespace onboardDetector{
         std::vector<onboardDetector::box3D> dbBBoxes_; // DBSCAN bounding boxes
         std::vector<std::vector<Eigen::Vector3d>> pcClustersVisual_; // pointcloud clusters
         std::vector<Eigen::Vector3d> pcClusterCentersVisual_; // pointcloud cluster centers
-        std::vector<Eigen::Vector3d> pcClusterStdsVisual_; // pointcloud cluster standard deviation in each axis      
+        std::vector<Eigen::Vector3d> pcClusterStdsVisual_; // pointcloud cluster standard deviation in each axis
         std::vector<onboardDetector::box3D> filteredBBoxesBeforeYolo_; // filtered bboxes before yolo
         std::vector<onboardDetector::box3D> filteredBBoxes_; // filtered bboxes
         std::vector<std::vector<Eigen::Vector3d>> filteredPcClusters_; // pointcloud clusters after filtering by UV and DBSCAN fusion
@@ -206,38 +209,36 @@ namespace onboardDetector{
         bool newDetectFlag_;
         std::vector<std::deque<onboardDetector::box3D>> boxHist_; // data association result: history of filtered bounding boxes for each box in current frame
         std::vector<std::deque<std::vector<Eigen::Vector3d>>> pcHist_; // data association result: history of filtered pc clusteres for each pc cluster in current frame
-        std::vector<std::deque<Eigen::Vector3d>> pcCenterHist_; 
+        std::vector<std::deque<Eigen::Vector3d>> pcCenterHist_;
         std::vector<onboardDetector::kalman_filter> filters_; // kalman filter for each objects
 
         // YOLO RESULTS
-        vision_msgs::Detection2DArray yoloDetectionResults_; // yolo detected 2D results
+        vision_msgs::msg::Detection2DArray yoloDetectionResults_; // yolo detected 2D results
         cv::Mat detectedColorImage_;
 
     public:
         dynamicDetector();
-        dynamicDetector(const ros::NodeHandle& nh);
-        void initDetector(const ros::NodeHandle& nh);
 
         void initParam();
         void registerPub();
         void registerCallback();
 
         // service
-		bool getDynamicObstacles(onboard_detector::GetDynamicObstacles::Request& req, 
-								 onboard_detector::GetDynamicObstacles::Response& res);
+        void getDynamicObstaclesSrv(const std::shared_ptr<onboard_detector::srv::GetDynamicObstacles::Request> req,
+                                    std::shared_ptr<onboard_detector::srv::GetDynamicObstacles::Response> res);
 
         // callback
-        void depthPoseCB(const sensor_msgs::ImageConstPtr& img, const geometry_msgs::PoseStampedConstPtr& pose);
-        void depthOdomCB(const sensor_msgs::ImageConstPtr& img, const nav_msgs::OdometryConstPtr& odom);
-        void lidarPoseCB(const sensor_msgs::PointCloud2ConstPtr& cloudMsg, const geometry_msgs::PoseStampedConstPtr& pose);
-        void lidarOdomCB(const sensor_msgs::PointCloud2ConstPtr& cloudMsg, const nav_msgs::OdometryConstPtr& odom);
-        void colorImgCB(const sensor_msgs::ImageConstPtr& img);
-        void yoloDetectionCB(const vision_msgs::Detection2DArrayConstPtr& detections);
-        void detectionCB(const ros::TimerEvent&);
-        void lidarDetectionCB(const ros::TimerEvent&);
-        void trackingCB(const ros::TimerEvent&);
-        void classificationCB(const ros::TimerEvent&);
-        void visCB(const ros::TimerEvent&);
+        void depthPoseCB(const sensor_msgs::msg::Image::ConstSharedPtr& img, const geometry_msgs::msg::PoseStamped::ConstSharedPtr& pose);
+        void depthOdomCB(const sensor_msgs::msg::Image::ConstSharedPtr& img, const nav_msgs::msg::Odometry::ConstSharedPtr& odom);
+        void lidarPoseCB(const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloudMsg, const geometry_msgs::msg::PoseStamped::ConstSharedPtr& pose);
+        void lidarOdomCB(const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloudMsg, const nav_msgs::msg::Odometry::ConstSharedPtr& odom);
+        void colorImgCB(const sensor_msgs::msg::Image::ConstSharedPtr& img);
+        void yoloDetectionCB(const vision_msgs::msg::Detection2DArray::ConstSharedPtr& detections);
+        void detectionCB();
+        void lidarDetectionCB();
+        void trackingCB();
+        void classificationCB();
+        void visCB();
 
         // detect function
         void uvDetect();
@@ -245,13 +246,13 @@ namespace onboardDetector{
         void lidarDetect();
         void filterLVBBoxes(); // filter lidar and vision bounding boxes
         void transformUVBBoxes(std::vector<onboardDetector::box3D>& bboxes);
-        
+
         // Visual DBSCAN Detector Functions
         void projectDepthImage();
         void filterPoints(const std::vector<Eigen::Vector3d>& points, std::vector<Eigen::Vector3d>& filteredPoints);
         void clusterPointsAndBBoxes(const std::vector<Eigen::Vector3d>& points, std::vector<onboardDetector::box3D>& bboxes, std::vector<std::vector<Eigen::Vector3d>>& pcClusters, std::vector<Eigen::Vector3d>& pcClusterCenters, std::vector<Eigen::Vector3d>& pcClusterStds);
         void voxelFilter(const std::vector<Eigen::Vector3d>& points, std::vector<Eigen::Vector3d>& filteredPoints);
-        
+
         // detection helper functions
         void calcPcFeat(const std::vector<Eigen::Vector3d>& pcCluster, Eigen::Vector3d& pcClusterCenter, Eigen::Vector3d& pcClusterStd);
         double calBoxIOU(const onboardDetector::box3D& box1, const onboardDetector::box3D& box2, bool ignoreZmin=false);
@@ -272,10 +273,10 @@ namespace onboardDetector{
 
         // visualization
         void getDynamicPc(std::vector<Eigen::Vector3d>& dynamicPc);
-        void publishUVImages(); 
+        void publishUVImages();
         void publishColorImages();
-        void publishPoints(const std::vector<Eigen::Vector3d>& points, const ros::Publisher& publisher);
-        void publish3dBox(const std::vector<onboardDetector::box3D>& bboxes, const ros::Publisher& publisher, double r, double g, double b);
+        void publishPoints(const std::vector<Eigen::Vector3d>& points, const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr& publisher);
+        void publish3dBox(const std::vector<onboardDetector::box3D>& bboxes, const rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr& publisher, double r, double g, double b);
         void publishHistoryTraj();
         void publishVelVis();
         void publishLidarClusters();
@@ -289,8 +290,8 @@ namespace onboardDetector{
 
         // user functions
         void getDynamicObstacles(std::vector<onboardDetector::box3D>& incomeDynamicBBoxes, const Eigen::Vector3d &robotSize = Eigen::Vector3d(0.0,0.0,0.0));
-        void getDynamicObstaclesHist(std::vector<std::vector<Eigen::Vector3d>>& posHist, 
-									 std::vector<std::vector<Eigen::Vector3d>>& velHist, 
+        void getDynamicObstaclesHist(std::vector<std::vector<Eigen::Vector3d>>& posHist,
+									 std::vector<std::vector<Eigen::Vector3d>>& velHist,
 									 std::vector<std::vector<Eigen::Vector3d>>& sizeHist, const Eigen::Vector3d &robotSize = Eigen::Vector3d(0.0,0.0,0.0));
 
         // inline helper functions
@@ -299,25 +300,25 @@ namespace onboardDetector{
         int indexToAddress(const Eigen::Vector3i& idx, double res);
         int posToAddress(const Eigen::Vector3d& pos, double res);
         void indexToPos(const Eigen::Vector3i& idx, Eigen::Vector3d& pos, double res);
-        void getCameraPose(const geometry_msgs::PoseStampedConstPtr& pose, Eigen::Matrix4d& camPoseDepthMatrix, Eigen::Matrix4d& camPoseColorMatrix);
-        void getCameraPose(const nav_msgs::OdometryConstPtr& odom, Eigen::Matrix4d& camPoseDepthMatrix, Eigen::Matrix4d& camPoseColorMatrix);
-        void getLidarPose(const geometry_msgs::PoseStampedConstPtr& pose, Eigen::Matrix4d& lidarPoseMatrix);
-        void getLidarPose(const nav_msgs::OdometryConstPtr& odom, Eigen::Matrix4d& lidarPoseMatrix);
+        void getCameraPose(const geometry_msgs::msg::PoseStamped::ConstSharedPtr& pose, Eigen::Matrix4d& camPoseDepthMatrix, Eigen::Matrix4d& camPoseColorMatrix);
+        void getCameraPose(const nav_msgs::msg::Odometry::ConstSharedPtr& odom, Eigen::Matrix4d& camPoseDepthMatrix, Eigen::Matrix4d& camPoseColorMatrix);
+        void getLidarPose(const geometry_msgs::msg::PoseStamped::ConstSharedPtr& pose, Eigen::Matrix4d& lidarPoseMatrix);
+        void getLidarPose(const nav_msgs::msg::Odometry::ConstSharedPtr& odom, Eigen::Matrix4d& lidarPoseMatrix);
         onboardDetector::Point eigenToDBPoint(const Eigen::Vector3d& p);
         Eigen::Vector3d dbPointToEigen(const onboardDetector::Point& pDB);
-        void eigenToDBPointVec(const std::vector<Eigen::Vector3d>& points, std::vector<onboardDetector::Point>& pointsDB, int size);       
+        void eigenToDBPointVec(const std::vector<Eigen::Vector3d>& points, std::vector<onboardDetector::Point>& pointsDB, int size);
     };
 
 
     inline bool dynamicDetector::isInFilterRange(const Eigen::Vector3d& pos){
-        if ((pos(0) >= this->position_(0) - this->localSensorRange_(0)) and (pos(0) <= this->position_(0) + this->localSensorRange_(0)) and 
-            (pos(1) >= this->position_(1) - this->localSensorRange_(1)) and (pos(1) <= this->position_(1) + this->localSensorRange_(1)) and 
+        if ((pos(0) >= this->position_(0) - this->localSensorRange_(0)) and (pos(0) <= this->position_(0) + this->localSensorRange_(0)) and
+            (pos(1) >= this->position_(1) - this->localSensorRange_(1)) and (pos(1) <= this->position_(1) + this->localSensorRange_(1)) and
             (pos(2) >= this->position_(2) - this->localSensorRange_(2)) and (pos(2) <= this->position_(2) + this->localSensorRange_(2))){
             return true;
         }
         else{
             return false;
-        }        
+        }
     }
 
     inline void dynamicDetector::posToIndex(const Eigen::Vector3d& pos, Eigen::Vector3i& idx, double res){
@@ -342,8 +343,8 @@ namespace onboardDetector{
 		pos(1) = (idx(1) + 0.5) * res - localSensorRange_(1) + this->position_(1);
 		pos(2) = (idx(2) + 0.5) * res - localSensorRange_(2) + this->position_(2);
 	}
-    
-    inline void dynamicDetector::getCameraPose(const geometry_msgs::PoseStampedConstPtr& pose, Eigen::Matrix4d& camPoseDepthMatrix, Eigen::Matrix4d& camPoseColorMatrix){
+
+    inline void dynamicDetector::getCameraPose(const geometry_msgs::msg::PoseStamped::ConstSharedPtr& pose, Eigen::Matrix4d& camPoseDepthMatrix, Eigen::Matrix4d& camPoseColorMatrix){
         Eigen::Quaterniond quat;
         quat = Eigen::Quaterniond(pose->pose.orientation.w, pose->pose.orientation.x, pose->pose.orientation.y, pose->pose.orientation.z);
         Eigen::Matrix3d rot = quat.toRotationMatrix();
@@ -351,7 +352,7 @@ namespace onboardDetector{
         // convert body pose to camera pose
         Eigen::Matrix4d map2body; map2body.setZero();
         map2body.block<3, 3>(0, 0) = rot;
-        map2body(0, 3) = pose->pose.position.x; 
+        map2body(0, 3) = pose->pose.position.x;
         map2body(1, 3) = pose->pose.position.y;
         map2body(2, 3) = pose->pose.position.z;
         map2body(3, 3) = 1.0;
@@ -360,7 +361,7 @@ namespace onboardDetector{
         camPoseColorMatrix = map2body * this->body2CamColor_;
     }
 
-    inline void dynamicDetector::getCameraPose(const nav_msgs::OdometryConstPtr& odom, Eigen::Matrix4d& camPoseDepthMatrix, Eigen::Matrix4d& camPoseColorMatrix){
+    inline void dynamicDetector::getCameraPose(const nav_msgs::msg::Odometry::ConstSharedPtr& odom, Eigen::Matrix4d& camPoseDepthMatrix, Eigen::Matrix4d& camPoseColorMatrix){
         Eigen::Quaterniond quat;
         quat = Eigen::Quaterniond(odom->pose.pose.orientation.w, odom->pose.pose.orientation.x, odom->pose.pose.orientation.y, odom->pose.pose.orientation.z);
         Eigen::Matrix3d rot = quat.toRotationMatrix();
@@ -368,7 +369,7 @@ namespace onboardDetector{
         // convert body pose to camera pose
         Eigen::Matrix4d map2body; map2body.setZero();
         map2body.block<3, 3>(0, 0) = rot;
-        map2body(0, 3) = odom->pose.pose.position.x; 
+        map2body(0, 3) = odom->pose.pose.position.x;
         map2body(1, 3) = odom->pose.pose.position.y;
         map2body(2, 3) = odom->pose.pose.position.z;
         map2body(3, 3) = 1.0;
@@ -377,7 +378,7 @@ namespace onboardDetector{
         camPoseColorMatrix = map2body * this->body2CamColor_;
     }
 
-    inline void dynamicDetector::getLidarPose(const geometry_msgs::PoseStampedConstPtr& pose, Eigen::Matrix4d& lidarPoseMatrix){
+    inline void dynamicDetector::getLidarPose(const geometry_msgs::msg::PoseStamped::ConstSharedPtr& pose, Eigen::Matrix4d& lidarPoseMatrix){
         Eigen::Quaterniond quat;
         quat = Eigen::Quaterniond(pose->pose.orientation.w, pose->pose.orientation.x, pose->pose.orientation.y, pose->pose.orientation.z);
         Eigen::Matrix3d rot = quat.toRotationMatrix();
@@ -385,7 +386,7 @@ namespace onboardDetector{
         // convert body pose to camera pose
         Eigen::Matrix4d map2body; map2body.setZero();
         map2body.block<3, 3>(0, 0) = rot;
-        map2body(0, 3) = pose->pose.position.x; 
+        map2body(0, 3) = pose->pose.position.x;
         map2body(1, 3) = pose->pose.position.y;
         map2body(2, 3) = pose->pose.position.z;
         map2body(3, 3) = 1.0;
@@ -393,7 +394,7 @@ namespace onboardDetector{
         lidarPoseMatrix = map2body * this->body2Lidar_;
     }
 
-    inline void dynamicDetector::getLidarPose(const nav_msgs::OdometryConstPtr& odom, Eigen::Matrix4d& lidarPoseMatrix){
+    inline void dynamicDetector::getLidarPose(const nav_msgs::msg::Odometry::ConstSharedPtr& odom, Eigen::Matrix4d& lidarPoseMatrix){
         Eigen::Quaterniond quat;
         quat = Eigen::Quaterniond(odom->pose.pose.orientation.w, odom->pose.pose.orientation.x, odom->pose.pose.orientation.y, odom->pose.pose.orientation.z);
         Eigen::Matrix3d rot = quat.toRotationMatrix();
@@ -401,14 +402,14 @@ namespace onboardDetector{
         // convert body pose to camera pose
         Eigen::Matrix4d map2body; map2body.setZero();
         map2body.block<3, 3>(0, 0) = rot;
-        map2body(0, 3) = odom->pose.pose.position.x; 
+        map2body(0, 3) = odom->pose.pose.position.x;
         map2body(1, 3) = odom->pose.pose.position.y;
         map2body(2, 3) = odom->pose.pose.position.z;
         map2body(3, 3) = 1.0;
 
         lidarPoseMatrix = map2body * this->body2Lidar_;
     }
-    
+
     inline onboardDetector::Point dynamicDetector::eigenToDBPoint(const Eigen::Vector3d& p){
         onboardDetector::Point pDB;
         pDB.x = p(0);

@@ -6,30 +6,30 @@
 #include <onboard_detector/dynamicDetector.h>
 
 namespace onboardDetector{
-    dynamicDetector::dynamicDetector(){
+    dynamicDetector::dynamicDetector()
+        : rclcpp::Node("onboard_detector",
+                       rclcpp::NodeOptions()
+                           .allow_undeclared_parameters(true)
+                           .automatically_declare_parameters_from_overrides(true)){
         this->ns_ = "onboard_detector";
         this->hint_ = "[onboardDetector]";
-    }
-
-    dynamicDetector::dynamicDetector(const ros::NodeHandle& nh){
-        this->ns_ = "onboard_detector";
-        this->hint_ = "[onboardDetector]";
-        this->nh_ = nh;
-        this->initParam();
-        this->registerPub();
-        this->registerCallback();
-    }
-
-    void dynamicDetector::initDetector(const ros::NodeHandle& nh){
-        this->nh_ = nh;
         this->initParam();
         this->registerPub();
         this->registerCallback();
     }
 
     void dynamicDetector::initParam(){
+        // sensor mode: lidar only (no camera)
+        if (not this->get_parameter("lidar_only", this->lidarOnly_)){
+            this->lidarOnly_ = true;
+            cout << this->hint_ << ": No lidar only option. Use default: true (camera disabled)" << endl;
+        }
+        else{
+            cout << this->hint_ << ": LiDAR-only mode (camera disabled): " << (this->lidarOnly_ ? "true" : "false") << endl;
+        }
+
         // localization mode
-        if (not this->nh_.getParam(this->ns_ + "/localization_mode", this->localizationMode_)){
+        if (not this->get_parameter("localization_mode", this->localizationMode_)){
             this->localizationMode_ = 0;
             cout << this->hint_ << ": No localization mode option. Use default: pose" << endl;
         }
@@ -38,7 +38,7 @@ namespace onboardDetector{
         }   
 
         // depth topic name
-        if (not this->nh_.getParam(this->ns_ + "/depth_image_topic", this->depthTopicName_)){
+        if (not this->get_parameter("depth_image_topic", this->depthTopicName_)){
             this->depthTopicName_ = "/camera/depth/image_raw";
             cout << this->hint_ << ": No depth image topic name. Use default: /camera/depth/image_raw" << endl;
         }
@@ -48,7 +48,7 @@ namespace onboardDetector{
 
 
         // color topic name
-        if (not this->nh_.getParam(this->ns_ + "/color_image_topic", this->colorImgTopicName_)){
+        if (not this->get_parameter("color_image_topic", this->colorImgTopicName_)){
             this->colorImgTopicName_ = "/camera/color/image_raw";
             cout << this->hint_ << ": No color image topic name. Use default: /camera/color/image_raw" << endl;
         }
@@ -57,7 +57,7 @@ namespace onboardDetector{
         }
 
         // lidar topic name
-        if (not this->nh_.getParam(this->ns_ + "/lidar_pointcloud_topic", this->lidarTopicName_)){
+        if (not this->get_parameter("lidar_pointcloud_topic", this->lidarTopicName_)){
             this->lidarTopicName_ = "/cloud_registered";
             cout << this->hint_ << ": No lidar pointcloud topic name. Use default: /cloud_registered" << endl;
         }
@@ -67,7 +67,7 @@ namespace onboardDetector{
 
         if (this->localizationMode_ == 0){
             // odom topic name
-            if (not this->nh_.getParam(this->ns_ + "/pose_topic", this->poseTopicName_)){
+            if (not this->get_parameter("pose_topic", this->poseTopicName_)){
                 this->poseTopicName_ = "/CERLAB/quadcopter/pose";
                 cout << this->hint_ << ": No pose topic name. Use default: /CERLAB/quadcopter/pose" << endl;
             }
@@ -78,7 +78,7 @@ namespace onboardDetector{
 
         if (this->localizationMode_ == 1){
             // pose topic name
-            if (not this->nh_.getParam(this->ns_ + "/odom_topic", this->odomTopicName_)){
+            if (not this->get_parameter("odom_topic", this->odomTopicName_)){
                 this->odomTopicName_ = "/CERLAB/quadcopter/odom";
                 cout << this->hint_ << ": No odom topic name. Use default: /CERLAB/quadcopter/odom" << endl;
             }
@@ -89,9 +89,12 @@ namespace onboardDetector{
 
         // depth intrinsics
         std::vector<double> depthIntrinsics (4);
-        if (not this->nh_.getParam(this->ns_ + "/depth_intrinsics", depthIntrinsics)){
-            cout << this->hint_ << ": Please check camera intrinsics!" << endl;
-            exit(0);
+        if (not this->get_parameter("depth_intrinsics", depthIntrinsics)){
+            if (not this->lidarOnly_){
+                cout << this->hint_ << ": Please check camera intrinsics!" << endl;
+                exit(0);
+            }
+            cout << this->hint_ << ": No depth intrinsics (not required in lidar only mode)." << endl;
         }
         else{
             this->fx_ = depthIntrinsics[0];
@@ -103,9 +106,12 @@ namespace onboardDetector{
 
         // color intrinsics
         std::vector<double> colorIntrinsics (4);
-        if (not this->nh_.getParam(this->ns_ + "/color_intrinsics", colorIntrinsics)){
-            cout << this->hint_ << ": Please check camera intrinsics!" << endl;
-            exit(0);
+        if (not this->get_parameter("color_intrinsics", colorIntrinsics)){
+            if (not this->lidarOnly_){
+                cout << this->hint_ << ": Please check camera intrinsics!" << endl;
+                exit(0);
+            }
+            cout << this->hint_ << ": No color intrinsics (not required in lidar only mode)." << endl;
         }
         else{
             this->fxC_ = colorIntrinsics[0];
@@ -116,7 +122,7 @@ namespace onboardDetector{
         }
 
         // depth scale factor
-        if (not this->nh_.getParam(this->ns_ + "/depth_scale_factor", this->depthScale_)){
+        if (not this->get_parameter("depth_scale_factor", this->depthScale_)){
             this->depthScale_ = 1000.0;
             cout << this->hint_ << ": No depth scale factor. Use default: 1000." << endl;
         }
@@ -125,7 +131,7 @@ namespace onboardDetector{
         }
 
         // depth min value
-        if (not this->nh_.getParam(this->ns_ + "/depth_min_value", this->depthMinValue_)){
+        if (not this->get_parameter("depth_min_value", this->depthMinValue_)){
             this->depthMinValue_ = 0.2;
             cout << this->hint_ << ": No depth min value. Use default: 0.2 m." << endl;
         }
@@ -134,7 +140,7 @@ namespace onboardDetector{
         }
 
         // depth max value
-        if (not this->nh_.getParam(this->ns_ + "/depth_max_value", this->depthMaxValue_)){
+        if (not this->get_parameter("depth_max_value", this->depthMaxValue_)){
             this->depthMaxValue_ = 5.0;
             this->raycastMaxLength_ = 5.0;
             cout << this->hint_ << ": No depth max value. Use default: 5.0 m." << endl;
@@ -145,7 +151,7 @@ namespace onboardDetector{
         }
 
         // depth filter margin
-        if (not this->nh_.getParam(this->ns_ + "/depth_filter_margin", this->depthFilterMargin_)){
+        if (not this->get_parameter("depth_filter_margin", this->depthFilterMargin_)){
             this->depthFilterMargin_ = 0;
             cout << this->hint_ << ": No depth filter margin. Use default: 0." << endl;
         }
@@ -154,7 +160,7 @@ namespace onboardDetector{
         }
 
         // depth skip pixel
-        if (not this->nh_.getParam(this->ns_ + "/depth_skip_pixel", this->skipPixel_)){
+        if (not this->get_parameter("depth_skip_pixel", this->skipPixel_)){
             this->skipPixel_ = 1;
             cout << this->hint_ << ": No depth skip pixel. Use default: 1." << endl;
         }
@@ -164,7 +170,7 @@ namespace onboardDetector{
 
         // ------------------------------------------------------------------------------------
         // depth image columns
-        if (not this->nh_.getParam(this->ns_ + "/image_cols", this->imgCols_)){
+        if (not this->get_parameter("image_cols", this->imgCols_)){
             this->imgCols_ = 640;
             cout << this->hint_ << ": No depth image columns. Use default: 640." << endl;
         }
@@ -173,7 +179,7 @@ namespace onboardDetector{
         }
 
         // depth skip pixel
-        if (not this->nh_.getParam(this->ns_ + "/image_rows", this->imgRows_)){
+        if (not this->get_parameter("image_rows", this->imgRows_)){
             this->imgRows_ = 480;
             cout << this->hint_ << ": No depth image rows. Use default: 480." << endl;
         }
@@ -187,8 +193,8 @@ namespace onboardDetector{
 
         // transform matrix: body to camera depth
         std::vector<double> body2CamDepthVec (16);
-        if (not this->nh_.getParam(this->ns_ + "/body_to_camera_depth", body2CamDepthVec)){
-            ROS_ERROR("[dynamicDetector]: Please check body to camera matrix!");
+        if (not this->get_parameter("body_to_camera_depth", body2CamDepthVec)){
+            RCLCPP_ERROR(this->get_logger(), "[dynamicDetector]: Please check body to camera matrix!");
         }
         else{
             for (int i=0; i<4; ++i){
@@ -200,8 +206,8 @@ namespace onboardDetector{
         
         // transform matrix: body to camera color
         std::vector<double> body2CamColorVec (16);
-        if (not this->nh_.getParam(this->ns_ + "/body_to_camera_color", body2CamColorVec)){
-            ROS_ERROR("[dynamicDetector]: Please check body to camera color matrix!");
+        if (not this->get_parameter("body_to_camera_color", body2CamColorVec)){
+            RCLCPP_ERROR(this->get_logger(), "[dynamicDetector]: Please check body to camera color matrix!");
         }
         else{
             for (int i=0; i<4; ++i){
@@ -213,8 +219,8 @@ namespace onboardDetector{
 
         // transform matrix: body to lidar
         std::vector<double> body2LidarVec (16);
-        if (not this->nh_.getParam(this->ns_ + "/body_to_lidar", body2LidarVec)){
-            ROS_ERROR("[dynamicDetector]: Please check body to lidar matrix!");
+        if (not this->get_parameter("body_to_lidar", body2LidarVec)){
+            RCLCPP_ERROR(this->get_logger(), "[dynamicDetector]: Please check body to lidar matrix!");
         }
         else{
             for (int i=0; i<4; ++i){
@@ -225,7 +231,7 @@ namespace onboardDetector{
         }
 
         // time step
-        if (not this->nh_.getParam(this->ns_ + "/time_step", this->dt_)){
+        if (not this->get_parameter("time_step", this->dt_)){
             this->dt_ = 0.033;
             std::cout << this->hint_ << ": No time step parameter found. Use default: 0.033." << std::endl;
         }
@@ -234,7 +240,7 @@ namespace onboardDetector{
         }  
 
         // ground height
-        if (not this->nh_.getParam(this->ns_ + "/ground_height", this->groundHeight_)){
+        if (not this->get_parameter("ground_height", this->groundHeight_)){
             this->groundHeight_ = 0.1;
             std::cout << this->hint_ << ": No ground height parameter. Use default: 0.1m." << std::endl;
         }
@@ -243,7 +249,7 @@ namespace onboardDetector{
         }
 
         // roof height
-        if (not this->nh_.getParam(this->ns_ + "/roof_height", this->roofHeight_)){
+        if (not this->get_parameter("roof_height", this->roofHeight_)){
             this->roofHeight_ = 2.0;
             std::cout << this->hint_ << ": No roof height parameter. Use default: 2.0m." << std::endl;
         }
@@ -252,7 +258,7 @@ namespace onboardDetector{
         }
 
         // min num of points for a voxel to be occupied in voxel filter
-        if (not this->nh_.getParam(this->ns_ + "/voxel_occupied_thresh", this->voxelOccThresh_)){
+        if (not this->get_parameter("voxel_occupied_thresh", this->voxelOccThresh_)){
             this->voxelOccThresh_ = 10;
             cout << this->hint_ << ": No voxel_occupied_threshold. Use default: 10." << endl;
         }
@@ -261,7 +267,7 @@ namespace onboardDetector{
         }
 
         // minimum number of points in each cluster
-        if (not this->nh_.getParam(this->ns_ + "/dbscan_min_points_cluster", this->dbMinPointsCluster_)){
+        if (not this->get_parameter("dbscan_min_points_cluster", this->dbMinPointsCluster_)){
             this->dbMinPointsCluster_ = 18;
             cout << this->hint_ << ": No DBSCAN minimum point in each cluster parameter. Use default: 18." << endl;
         }
@@ -270,7 +276,7 @@ namespace onboardDetector{
         }
 
         // search range
-        if (not this->nh_.getParam(this->ns_ + "/dbscan_search_range_epsilon", this->dbEpsilon_)){
+        if (not this->get_parameter("dbscan_search_range_epsilon", this->dbEpsilon_)){
             this->dbEpsilon_ = 0.3;
             cout << this->hint_ << ": No DBSCAN epsilon parameter. Use default: 0.3." << endl;
         }
@@ -279,7 +285,7 @@ namespace onboardDetector{
         }  
 
         // lidar dbscan min points
-        if (not this->nh_.getParam(this->ns_ + "/lidar_DBSCAN_min_points", this->lidarDBMinPoints_)){
+        if (not this->get_parameter("lidar_DBSCAN_min_points", this->lidarDBMinPoints_)){
             this->lidarDBMinPoints_ = 10;
             cout << this->hint_ << ": No lidar DBSCAN minimum point in each cluster parameter. Use default: 10." << endl;
         }
@@ -288,7 +294,7 @@ namespace onboardDetector{
         }
 
         // lidar dbscan search range
-        if (not this->nh_.getParam(this->ns_ + "/lidar_DBSCAN_epsilon", this->lidarDBEpsilon_)){
+        if (not this->get_parameter("lidar_DBSCAN_epsilon", this->lidarDBEpsilon_)){
             this->lidarDBEpsilon_ = 0.2;
             cout << this->hint_ << ": No lidar DBSCAN epsilon parameter. Use default: 0.5." << endl;
         }
@@ -297,7 +303,7 @@ namespace onboardDetector{
         }
         
         // lidar points downsample threshold
-        if(not this->nh_.getParam(this->ns_ + "/downsample_threshold", this->downSampleThresh_)){
+        if(not this->get_parameter("downsample_threshold", this->downSampleThresh_)){
             this->downSampleThresh_ = 4000;
             cout << this->hint_ << ": No downsample threshold parameter found. Use default: 4000." << endl;
         }
@@ -306,7 +312,7 @@ namespace onboardDetector{
         }
 
         // gaussian downsample rate
-        if (not this->nh_.getParam(this->ns_ + "/gaussian_downsample_rate", this->gaussianDownSampleRate_)){
+        if (not this->get_parameter("gaussian_downsample_rate", this->gaussianDownSampleRate_)){
             this->gaussianDownSampleRate_ = 2;
             std::cout << this->hint_ << ": No gaussian downsample rate parameter found. Use default: 2." << std::endl;
         }
@@ -315,7 +321,7 @@ namespace onboardDetector{
         }
 
         // IOU threshold
-        if (not this->nh_.getParam(this->ns_ + "/filtering_BBox_IOU_threshold", this->boxIOUThresh_)){
+        if (not this->get_parameter("filtering_BBox_IOU_threshold", this->boxIOUThresh_)){
             this->boxIOUThresh_ = 0.5;
             cout << this->hint_ << ": No threshold for boununding box IOU filtering parameter found. Use default: 0.5." << endl;
         }
@@ -324,7 +330,7 @@ namespace onboardDetector{
         }
 
         // maximum match range
-        if (not this->nh_.getParam(this->ns_ + "/max_match_range", this->maxMatchRange_)){
+        if (not this->get_parameter("max_match_range", this->maxMatchRange_)){
             this->maxMatchRange_ = 0.5;
             cout << this->hint_ << ": No max match range parameter found. Use default: 0.5m." << endl;
         }
@@ -333,7 +339,7 @@ namespace onboardDetector{
         }   
 
         // maximum size difference for matching
-        if (not this->nh_.getParam(this->ns_ + "/max_size_diff_range", this->maxMatchSizeRange_)){
+        if (not this->get_parameter("max_size_diff_range", this->maxMatchSizeRange_)){
             this->maxMatchSizeRange_ = 0.5;
             cout << this->hint_ << ": No max size difference range for matching parameter found. Use default: 0.5m." << endl;
         }
@@ -343,7 +349,7 @@ namespace onboardDetector{
 
         // feature weight
         std::vector<double> tempWeights;
-        if (not nh_.getParam(ns_ + "/feature_weight", tempWeights)) {
+        if (not this->get_parameter("feature_weight", tempWeights)) {
             this->featureWeights_ = Eigen::VectorXd(10);
             this->featureWeights_ << 3.0, 3.0, 0.1, 0.5, 0.5, 0.05, 0, 0, 0;
             std::cout << this->hint_ << ": No feature weights parameter found. Using default feature weights: [3.0, 3.0, 0.1, 0.5, 0.5, 0.05, 0, 0, 0]." << std::endl;
@@ -361,7 +367,7 @@ namespace onboardDetector{
         } 
 
         // tracking history size
-        if (not this->nh_.getParam(this->ns_ + "/history_size", this->histSize_)){
+        if (not this->get_parameter("history_size", this->histSize_)){
             this->histSize_ = 5;
             std::cout << this->hint_ << ": No tracking history size parameter found. Use default: 5." << std::endl;
         }
@@ -370,7 +376,7 @@ namespace onboardDetector{
         }  
 
         // history threshold for fixing box size
-        if (not this->nh_.getParam(this->ns_ + "/fix_size_history_threshold", this->fixSizeHistThresh_)){
+        if (not this->get_parameter("fix_size_history_threshold", this->fixSizeHistThresh_)){
             this->fixSizeHistThresh_ = 10;
             std::cout << this->hint_ << ": No history threshold for fixing size parameter found. Use default: 10." << std::endl;
         }
@@ -379,7 +385,7 @@ namespace onboardDetector{
         }  
 
         // dimension threshold for fixing box size
-        if (not this->nh_.getParam(this->ns_ + "/fix_size_dimension_threshold", this->fixSizeDimThresh_)){
+        if (not this->get_parameter("fix_size_dimension_threshold", this->fixSizeDimThresh_)){
             this->fixSizeDimThresh_ = 0.4;
             std::cout << this->hint_ << ": No dimension threshold for fixing size parameter found. Use default: 0.4." << std::endl;
         }
@@ -389,7 +395,7 @@ namespace onboardDetector{
 
         // kalman filter parameters
         std::vector<double> kalmanFilterParams;
-        if (not this->nh_.getParam(this->ns_ + "/kalman_filter_param", kalmanFilterParams)){
+        if (not this->get_parameter("kalman_filter_param", kalmanFilterParams)){
             this->eP_ = 0.5;
             this->eQPos_ = 0.5; // pos prediction noise
             this->eQVel_ = 0.5; // vel prediction noise
@@ -421,7 +427,7 @@ namespace onboardDetector{
         }  
 
         // num of frames used in KF for observation
-        if (not this->nh_.getParam(this->ns_ + "/kalman_filter_averaging_frames", this->kfAvgFrames_)){
+        if (not this->get_parameter("kalman_filter_averaging_frames", this->kfAvgFrames_)){
             this->kfAvgFrames_ = 10;
             std::cout << this->hint_ << ": No number of frames used in KF for observation parameter found. Use default: 10." << std::endl;
         }
@@ -430,7 +436,7 @@ namespace onboardDetector{
         } 
 
         // skip frame for classification
-        if (not this->nh_.getParam(this->ns_ + "/frame_skip", this->skipFrame_)){
+        if (not this->get_parameter("frame_skip", this->skipFrame_)){
             this->skipFrame_ = 5;
             std::cout << this->hint_ << ": No skip frame parameter found. Use default: 5." << std::endl;
         }
@@ -439,7 +445,7 @@ namespace onboardDetector{
         }  
 
         // velocity threshold for dynamic classification
-        if (not this->nh_.getParam(this->ns_ + "/dynamic_velocity_threshold", this->dynaVelThresh_)){
+        if (not this->get_parameter("dynamic_velocity_threshold", this->dynaVelThresh_)){
             this->dynaVelThresh_ = 0.35;
             std::cout << this->hint_ << ": No dynamic velocity threshold parameter found. Use default: 0.35." << std::endl;
         }
@@ -448,7 +454,7 @@ namespace onboardDetector{
         }  
 
         // voting threshold for dynamic classification
-        if (not this->nh_.getParam(this->ns_ + "/dynamic_voting_threshold", this->dynaVoteThresh_)){
+        if (not this->get_parameter("dynamic_voting_threshold", this->dynaVoteThresh_)){
             this->dynaVoteThresh_ = 0.8;
             std::cout << this->hint_ << ": No dynamic velocity threshold parameter found. Use default: 0.8." << std::endl;
         }
@@ -457,7 +463,7 @@ namespace onboardDetector{
         }  
 
         // frames to force dynamic
-        if (not this->nh_.getParam(this->ns_ + "/frames_force_dynamic", this->forceDynaFrames_)){
+        if (not this->get_parameter("frames_force_dynamic", this->forceDynaFrames_)){
             this->forceDynaFrames_ = 20;
             std::cout << this->hint_ << ": No range of searching dynamic obstacles in box history found. Use default: 20." << std::endl;
         }
@@ -465,7 +471,7 @@ namespace onboardDetector{
             std::cout << this->hint_ << ": Range of searching dynamic obstacles in box history is set to: " << this->forceDynaFrames_ << std::endl;
         }  
 
-        if (not this->nh_.getParam(this->ns_ + "/frames_force_dynamic_check_range", this->forceDynaCheckRange_)){
+        if (not this->get_parameter("frames_force_dynamic_check_range", this->forceDynaCheckRange_)){
             this->forceDynaCheckRange_ = 30;
             std::cout << this->hint_ << ": No threshold for forcing dynamic obstacles found. Use default: 30." << std::endl;
         }
@@ -474,7 +480,7 @@ namespace onboardDetector{
         }  
 
         // dynamic consistency check
-        if (not this->nh_.getParam(this->ns_ + "/dynamic_consistency_threshold", this->dynamicConsistThresh_)){
+        if (not this->get_parameter("dynamic_consistency_threshold", this->dynamicConsistThresh_)){
             this->dynamicConsistThresh_ = 3;
             std::cout << this->hint_ << ": No threshold for dynamic-consistency check found. Use default: 3." << std::endl;
         }
@@ -483,11 +489,11 @@ namespace onboardDetector{
         }  
 
         if ( this->histSize_ < this->forceDynaCheckRange_+1){
-            ROS_ERROR("history length is too short to perform force-dynamic");
+            RCLCPP_ERROR(this->get_logger(), "history length is too short to perform force-dynamic");
         }
 
         // constrain target object size
-        if (not this->nh_.getParam(this->ns_ + "/target_constrain_size", this->constrainSize_)){
+        if (not this->get_parameter("target_constrain_size", this->constrainSize_)){
             this->constrainSize_ = false;
             std::cout << this->hint_ << ": No target object constrain size param found. Use default: false." << std::endl;
         }
@@ -497,7 +503,7 @@ namespace onboardDetector{
 
         // target object  sizes
         std::vector<double> targetObjectSizeTemp;
-        if (not this->nh_.getParam(this->ns_ + "/target_object_size", targetObjectSizeTemp)){
+        if (not this->get_parameter("target_object_size", targetObjectSizeTemp)){
             std::cout << this->hint_ << ": No target object size found. Do not apply target object size." << std::endl;
         }
         else{
@@ -512,7 +518,7 @@ namespace onboardDetector{
 
         // max object size
         std::vector<double> maxObjectSizeTemp;
-        if(not this->nh_.getParam(this->ns_ + "/max_object_size", maxObjectSizeTemp)){
+        if(not this->get_parameter("max_object_size", maxObjectSizeTemp)){
             this->maxObjectSize_ = Eigen::Vector3d (2.0, 2.0, 2.0);
             std::cout << this->hint_ << ": No max object size threshold parameter found. Use default: [2.0, 2.0, 2.0]." << endl;
         }
@@ -532,124 +538,150 @@ namespace onboardDetector{
     }
 
     void dynamicDetector::registerPub(){
-        image_transport::ImageTransport it(this->nh_);
         // uv detector depth map pub
-        this->uvDepthMapPub_ = it.advertise(this->ns_ + "/detected_depth_map", 10);
+        this->uvDepthMapPub_ = this->create_publisher<sensor_msgs::msg::Image>(this->ns_ + "/detected_depth_map", 10);
 
         // uv detector u depth map pub
-        this->uDepthMapPub_ = it.advertise(this->ns_ + "/detected_u_depth_map", 10);
+        this->uDepthMapPub_ = this->create_publisher<sensor_msgs::msg::Image>(this->ns_ + "/detected_u_depth_map", 10);
 
         // uv detector bird view pub
-        this->uvBirdViewPub_ = it.advertise(this->ns_ + "/u_depth_bird_view", 10);
+        this->uvBirdViewPub_ = this->create_publisher<sensor_msgs::msg::Image>(this->ns_ + "/u_depth_bird_view", 10);
 
         // color 2D bounding boxes pub
-        this->detectedColorImgPub_ = it.advertise(this->ns_ + "/detected_color_image", 10);
+        this->detectedColorImgPub_ = this->create_publisher<sensor_msgs::msg::Image>(this->ns_ + "/detected_color_image", 10);
 
         // uv detector bounding box pub
-        this->uvBBoxesPub_ = this->nh_.advertise<visualization_msgs::MarkerArray>(this->ns_ + "/uv_bboxes", 10);
+        this->uvBBoxesPub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(this->ns_ + "/uv_bboxes", 10);
 
         // DBSCAN bounding box pub
-        this->dbBBoxesPub_ = this->nh_.advertise<visualization_msgs::MarkerArray>(this->ns_ + "/dbscan_bboxes", 10);
+        this->dbBBoxesPub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(this->ns_ + "/dbscan_bboxes", 10);
 
         // visual bboxes pub
-        this->visualBBoxesPub_ = this->nh_.advertise<visualization_msgs::MarkerArray>(this->ns_ + "/visual_bboxes", 10);
+        this->visualBBoxesPub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(this->ns_ + "/visual_bboxes", 10);
 
         // lidar bbox pub
-        this->lidarBBoxesPub_ = this->nh_.advertise<visualization_msgs::MarkerArray>(this->ns_ + "/lidar_bboxes", 10);
+        this->lidarBBoxesPub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(this->ns_ + "/lidar_bboxes", 10);
 
         // filtered bounding box before YOLO pub
-        this->filteredBBoxesBeforeYoloPub_ = this->nh_.advertise<visualization_msgs::MarkerArray>(this->ns_ + "/filtered_before_yolo_bboxes", 10);
+        this->filteredBBoxesBeforeYoloPub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(this->ns_ + "/filtered_before_yolo_bboxes", 10);
 
         // filtered bounding box pub
-        this->filteredBBoxesPub_ = this->nh_.advertise<visualization_msgs::MarkerArray>(this->ns_ + "/filtered_bboxes", 10);
+        this->filteredBBoxesPub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(this->ns_ + "/filtered_bboxes", 10);
 
         // tracked bounding box pub
-        this->trackedBBoxesPub_ = this->nh_.advertise<visualization_msgs::MarkerArray>(this->ns_ + "/tracked_bboxes", 10);
+        this->trackedBBoxesPub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(this->ns_ + "/tracked_bboxes", 10);
 
         // dynamic bounding box pub
-        this->dynamicBBoxesPub_ = this->nh_.advertise<visualization_msgs::MarkerArray>(this->ns_ + "/dynamic_bboxes", 10);
+        this->dynamicBBoxesPub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(this->ns_ + "/dynamic_bboxes", 10);
 
         // filtered depth pointcloud pub
-        this->filteredDepthPointsPub_ = this->nh_.advertise<sensor_msgs::PointCloud2>(this->ns_ + "/filtered_depth_cloud", 10);
+        this->filteredDepthPointsPub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(this->ns_ + "/filtered_depth_cloud", 10);
 
         // lidar cluster pub 
-        this->lidarClustersPub_ = this->nh_.advertise<sensor_msgs::PointCloud2>(this->ns_ + "/lidar_clusters", 10);
+        this->lidarClustersPub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(this->ns_ + "/lidar_clusters", 10);
 
         // filtered pointcloud pub 
-        this->filteredPointsPub_ = this->nh_.advertise<sensor_msgs::PointCloud2>(this->ns_ + "/filtered_point_cloud", 10);
+        this->filteredPointsPub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(this->ns_ + "/filtered_point_cloud", 10);
 
         // dynamic pointcloud pub
-        this->dynamicPointsPub_ = this->nh_.advertise<sensor_msgs::PointCloud2>(this->ns_ + "/dynamic_point_cloud", 10);
+        this->dynamicPointsPub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(this->ns_ + "/dynamic_point_cloud", 10);
 
         // raw dynamic pointcloud pub
-        this->rawDynamicPointsPub_ = this->nh_.advertise<sensor_msgs::PointCloud2>(this->ns_ + "/raw_dynamic_point_cloud", 10);
+        this->rawDynamicPointsPub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(this->ns_ + "/raw_dynamic_point_cloud", 10);
 
         // downsample points visualization pub
-        this->downSamplePointsPub_ = this->nh_.advertise<sensor_msgs::PointCloud2>(this->ns_ + "/downsampled_point_cloud", 10);
+        this->downSamplePointsPub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(this->ns_ + "/downsampled_point_cloud", 10);
 
         // raw LiDAR points visualization pub
-        this->rawLidarPointsPub_ = this->nh_.advertise<sensor_msgs::PointCloud2>(this->ns_ + "/raw_lidar_point_cloud", 10);
+        this->rawLidarPointsPub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(this->ns_ + "/raw_lidar_point_cloud", 10);
 
         // history trajectory pub
-        this->historyTrajPub_ = this->nh_.advertise<visualization_msgs::MarkerArray>(this->ns_ + "/history_trajectories", 10);
+        this->historyTrajPub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(this->ns_ + "/history_trajectories", 10);
 
         // velocity visualization pub
-        this->velVisPub_ = this->nh_.advertise<visualization_msgs::MarkerArray>(this->ns_ + "/velocity_visualizaton", 10);
+        this->velVisPub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(this->ns_ + "/velocity_visualizaton", 10);
     }   
 
     void dynamicDetector::registerCallback(){
-        // depth pose callback
-        this->depthSub_.reset(new message_filters::Subscriber<sensor_msgs::Image>(this->nh_, this->depthTopicName_, 50));
-        this->lidarCloudSub_.reset(new message_filters::Subscriber<sensor_msgs::PointCloud2>(this->nh_, this->lidarTopicName_, 50));
-        // this->lidarCloudSub_ = this->nh_.subscribe(this->lidarTopicName_, 10, &dynamicDetector::lidarCloudCB, this);
+        // sensor QoS: best-effort is compatible with both reliable and best-effort publishers
+        rmw_qos_profile_t sensorQos = rmw_qos_profile_sensor_data;
+        sensorQos.depth = 50;
+        rmw_qos_profile_t poseQos = rmw_qos_profile_default;
+        poseQos.depth = 25;
+
+        // lidar cloud subscriber (always)
+        this->lidarCloudSub_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::PointCloud2>>(this, this->lidarTopicName_, sensorQos);
+
+        // depth image subscriber (camera mode only)
+        if (not this->lidarOnly_){
+            this->depthSub_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(this, this->depthTopicName_, sensorQos);
+        }
+
         if (this->localizationMode_ == 0){
-            this->poseSub_.reset(new message_filters::Subscriber<geometry_msgs::PoseStamped>(this->nh_, this->poseTopicName_, 25));
-            this->depthPoseSync_.reset(new message_filters::Synchronizer<depthPoseSync>(depthPoseSync(100), *this->depthSub_, *this->poseSub_));
-            this->depthPoseSync_->registerCallback(boost::bind(&dynamicDetector::depthPoseCB, this, _1, _2));
-            this->lidarPoseSync_.reset(new message_filters::Synchronizer<lidarPoseSync>(lidarPoseSync(100), *this->lidarCloudSub_, *this->poseSub_));
-            this->lidarPoseSync_->registerCallback(boost::bind(&dynamicDetector::lidarPoseCB, this, _1, _2));
+            this->poseSub_ = std::make_shared<message_filters::Subscriber<geometry_msgs::msg::PoseStamped>>(this, this->poseTopicName_, poseQos);
+            this->lidarPoseSync_ = std::make_shared<message_filters::Synchronizer<lidarPoseSync>>(lidarPoseSync(100), *this->lidarCloudSub_, *this->poseSub_);
+            this->lidarPoseSync_->registerCallback(std::bind(&dynamicDetector::lidarPoseCB, this, std::placeholders::_1, std::placeholders::_2));
+            if (not this->lidarOnly_){
+                this->depthPoseSync_ = std::make_shared<message_filters::Synchronizer<depthPoseSync>>(depthPoseSync(100), *this->depthSub_, *this->poseSub_);
+                this->depthPoseSync_->registerCallback(std::bind(&dynamicDetector::depthPoseCB, this, std::placeholders::_1, std::placeholders::_2));
+            }
         }
         else if (this->localizationMode_ == 1){
-            this->odomSub_.reset(new message_filters::Subscriber<nav_msgs::Odometry>(this->nh_, this->odomTopicName_, 25));
-            this->depthOdomSync_.reset(new message_filters::Synchronizer<depthOdomSync>(depthOdomSync(100), *this->depthSub_, *this->odomSub_));
-            this->depthOdomSync_->registerCallback(boost::bind(&dynamicDetector::depthOdomCB, this, _1, _2));
-            this->lidarOdomSync_.reset(new message_filters::Synchronizer<lidarOdomSync>(lidarOdomSync(100), *this->lidarCloudSub_, *this->odomSub_));
-            this->lidarOdomSync_->registerCallback(boost::bind(&dynamicDetector::lidarOdomCB, this, _1, _2));
+            this->odomSub_ = std::make_shared<message_filters::Subscriber<nav_msgs::msg::Odometry>>(this, this->odomTopicName_, poseQos);
+            this->lidarOdomSync_ = std::make_shared<message_filters::Synchronizer<lidarOdomSync>>(lidarOdomSync(100), *this->lidarCloudSub_, *this->odomSub_);
+            this->lidarOdomSync_->registerCallback(std::bind(&dynamicDetector::lidarOdomCB, this, std::placeholders::_1, std::placeholders::_2));
+            if (not this->lidarOnly_){
+                this->depthOdomSync_ = std::make_shared<message_filters::Synchronizer<depthOdomSync>>(depthOdomSync(100), *this->depthSub_, *this->odomSub_);
+                this->depthOdomSync_->registerCallback(std::bind(&dynamicDetector::depthOdomCB, this, std::placeholders::_1, std::placeholders::_2));
+            }
         }
         else{
-            ROS_ERROR("[dynamicDetector]: Invalid localization mode!");
+            RCLCPP_ERROR(this->get_logger(), "[dynamicDetector]: Invalid localization mode!");
             exit(0);
         }
 
-        // color image subscriber
-        this->colorImgSub_ = this->nh_.subscribe(this->colorImgTopicName_, 10, &dynamicDetector::colorImgCB, this);
+        if (not this->lidarOnly_){
+            // color image subscriber
+            this->colorImgSub_ = this->create_subscription<sensor_msgs::msg::Image>(this->colorImgTopicName_, 10, std::bind(&dynamicDetector::colorImgCB, this, std::placeholders::_1));
 
-        // yolo detection results subscriber
-        this->yoloDetectionSub_ = this->nh_.subscribe("yolo_detector/detected_bounding_boxes", 10, &dynamicDetector::yoloDetectionCB, this);
+            // yolo detection results subscriber
+            this->yoloDetectionSub_ = this->create_subscription<vision_msgs::msg::Detection2DArray>("yolo_detector/detected_bounding_boxes", 10, std::bind(&dynamicDetector::yoloDetectionCB, this, std::placeholders::_1));
+        }
 
         // detection timer
-        this->detectionTimer_ = this->nh_.createTimer(ros::Duration(this->dt_), &dynamicDetector::detectionCB, this);
+        this->detectionTimer_ = this->create_wall_timer(std::chrono::duration<double>(this->dt_), std::bind(&dynamicDetector::detectionCB, this));
 
         // lidar detection timer
-        this->lidarDetectionTimer_ = this->nh_.createTimer(ros::Duration(this->dt_), &dynamicDetector::lidarDetectionCB, this);
+        this->lidarDetectionTimer_ = this->create_wall_timer(std::chrono::duration<double>(this->dt_), std::bind(&dynamicDetector::lidarDetectionCB, this));
 
         // tracking timer
-        this->trackingTimer_ = this->nh_.createTimer(ros::Duration(this->dt_), &dynamicDetector::trackingCB, this);
+        this->trackingTimer_ = this->create_wall_timer(std::chrono::duration<double>(this->dt_), std::bind(&dynamicDetector::trackingCB, this));
 
         // classification timer
-        this->classificationTimer_ = this->nh_.createTimer(ros::Duration(this->dt_), &dynamicDetector::classificationCB, this);
-    
+        this->classificationTimer_ = this->create_wall_timer(std::chrono::duration<double>(this->dt_), std::bind(&dynamicDetector::classificationCB, this));
+
         // visualization timer
-        this->visTimer_ = this->nh_.createTimer(ros::Duration(this->dt_), &dynamicDetector::visCB, this);
-        
+        this->visTimer_ = this->create_wall_timer(std::chrono::duration<double>(this->dt_), std::bind(&dynamicDetector::visCB, this));
+
+        // warn until the first synchronized lidar cloud + localization pair arrives
+        this->sensorWarnTimer_ = this->create_wall_timer(std::chrono::seconds(5), [this](){
+            if (this->hasSensorPose_){
+                this->sensorWarnTimer_->cancel();
+                RCLCPP_INFO(this->get_logger(), "Receiving synchronized lidar + localization data.");
+                return;
+            }
+            RCLCPP_WARN(this->get_logger(), "No synchronized sensor data yet: waiting for [%s] + [%s]. Is the odometry source (e.g. FAST-LIO) running?",
+                        this->lidarTopicName_.c_str(), this->localizationMode_ == 0 ? this->poseTopicName_.c_str() : this->odomTopicName_.c_str());
+        });
+
 		// get dynamic obstacle service
-		this->getDynamicObstacleServer_ = this->nh_.advertiseService("onboard_detector/get_dynamic_obstacles", &dynamicDetector::getDynamicObstacles, this);
+		this->getDynamicObstacleServer_ = this->create_service<onboard_detector::srv::GetDynamicObstacles>("onboard_detector/get_dynamic_obstacles", std::bind(&dynamicDetector::getDynamicObstaclesSrv, this, std::placeholders::_1, std::placeholders::_2));
     }
 
-    bool dynamicDetector::getDynamicObstacles(onboard_detector::GetDynamicObstacles::Request& req, 
-                                              onboard_detector::GetDynamicObstacles::Response& res) {
+    void dynamicDetector::getDynamicObstaclesSrv(const std::shared_ptr<onboard_detector::srv::GetDynamicObstacles::Request> req,
+                                                 std::shared_ptr<onboard_detector::srv::GetDynamicObstacles::Response> res) {
         // Get the current robot position
-        Eigen::Vector3d currPos = Eigen::Vector3d (req.current_position.x, req.current_position.y, req.current_position.z);
+        Eigen::Vector3d currPos = Eigen::Vector3d (req->current_position.x, req->current_position.y, req->current_position.z);
 
         // Vector to store obstacles along with their distances
         std::vector<std::pair<double, onboardDetector::box3D>> obstaclesWithDistances;
@@ -660,7 +692,7 @@ namespace onboardDetector{
             Eigen::Vector3d diff = currPos - obsPos;
             diff(2) = 0.;
             double distance = diff.norm();
-            if (distance <= req.range) {
+            if (distance <= req->range) {
                 obstaclesWithDistances.push_back(std::make_pair(distance, bbox));
             }
         }
@@ -675,9 +707,9 @@ namespace onboardDetector{
         for (const auto& item : obstaclesWithDistances) {
             const onboardDetector::box3D& bbox = item.second;
 
-            geometry_msgs::Vector3 pos;
-            geometry_msgs::Vector3 vel;
-            geometry_msgs::Vector3 size;
+            geometry_msgs::msg::Vector3 pos;
+            geometry_msgs::msg::Vector3 vel;
+            geometry_msgs::msg::Vector3 size;
 
             pos.x = bbox.x;
             pos.y = bbox.y;
@@ -691,15 +723,13 @@ namespace onboardDetector{
             size.y = bbox.y_width;
             size.z = bbox.z_width;
 
-            res.position.push_back(pos);
-            res.velocity.push_back(vel);
-            res.size.push_back(size);
+            res->position.push_back(pos);
+            res->velocity.push_back(vel);
+            res->size.push_back(size);
         }
-
-        return true;
     }
 
-    void dynamicDetector::depthPoseCB(const sensor_msgs::ImageConstPtr& img, const geometry_msgs::PoseStampedConstPtr& pose){
+    void dynamicDetector::depthPoseCB(const sensor_msgs::msg::Image::ConstSharedPtr& img, const geometry_msgs::msg::PoseStamped::ConstSharedPtr& pose){
         // store current depth image
         cv_bridge::CvImagePtr imgPtr = cv_bridge::toCvCopy(img, img->encoding);
         if (img->encoding == sensor_msgs::image_encodings::TYPE_32FC1){
@@ -730,7 +760,7 @@ namespace onboardDetector{
         this->orientationColor_ = camPoseColorMatrix.block<3, 3>(0, 0);
     }
 
-    void dynamicDetector::depthOdomCB(const sensor_msgs::ImageConstPtr& img, const nav_msgs::OdometryConstPtr& odom){
+    void dynamicDetector::depthOdomCB(const sensor_msgs::msg::Image::ConstSharedPtr& img, const nav_msgs::msg::Odometry::ConstSharedPtr& odom){
         // store current depth image
         cv_bridge::CvImagePtr imgPtr = cv_bridge::toCvCopy(img, img->encoding);
         if (img->encoding == sensor_msgs::image_encodings::TYPE_32FC1){
@@ -761,7 +791,7 @@ namespace onboardDetector{
         this->orientationColor_ = camPoseColorMatrix.block<3, 3>(0, 0);
     }
 
-    void dynamicDetector::lidarPoseCB(const sensor_msgs::PointCloud2ConstPtr& cloudMsg, const geometry_msgs::PoseStampedConstPtr& pose){
+    void dynamicDetector::lidarPoseCB(const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloudMsg, const geometry_msgs::msg::PoseStamped::ConstSharedPtr& pose){
         // for visualization
         this->latestCloud_ = cloudMsg;
 
@@ -839,10 +869,10 @@ namespace onboardDetector{
         }
 
         this->lidarCloud_ = downsampledCloud;
-        sensor_msgs::PointCloud2 outputCloud;
+        sensor_msgs::msg::PointCloud2 outputCloud;
         pcl::toROSMsg(*this->lidarCloud_, outputCloud); // Convert to ROS message
         outputCloud.header.frame_id = "map";    // Set appropriate frame ID
-        this->downSamplePointsPub_.publish(outputCloud);
+        this->downSamplePointsPub_->publish(outputCloud);
 
         // store current position and orientation
         Eigen::Matrix4d lidarPoseMatrix;
@@ -860,9 +890,10 @@ namespace onboardDetector{
         this->positionLidar_(1) = lidarPoseMatrix(1, 3);
         this->positionLidar_(2) = lidarPoseMatrix(2, 3);
         this->orientationLidar_ = lidarPoseMatrix.block<3, 3>(0, 0);
+        this->hasSensorPose_ = true;
     }
 
-    void dynamicDetector::lidarOdomCB(const sensor_msgs::PointCloud2ConstPtr& cloudMsg, const nav_msgs::OdometryConstPtr& odom){
+    void dynamicDetector::lidarOdomCB(const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloudMsg, const nav_msgs::msg::Odometry::ConstSharedPtr& odom){
         // for visualization
         this->latestCloud_ = cloudMsg;
 
@@ -940,10 +971,10 @@ namespace onboardDetector{
         }
 
         this->lidarCloud_ = downsampledCloud;
-        sensor_msgs::PointCloud2 outputCloud;
+        sensor_msgs::msg::PointCloud2 outputCloud;
         pcl::toROSMsg(*this->lidarCloud_, outputCloud); // Convert to ROS message
         outputCloud.header.frame_id = "map";    // Set appropriate frame ID
-        this->downSamplePointsPub_.publish(outputCloud);
+        this->downSamplePointsPub_->publish(outputCloud);
         
         // store current position and orientation
         Eigen::Matrix4d lidarPoseMatrix;
@@ -961,34 +992,34 @@ namespace onboardDetector{
         this->positionLidar_(1) = lidarPoseMatrix(1, 3);
         this->positionLidar_(2) = lidarPoseMatrix(2, 3);
         this->orientationLidar_ = lidarPoseMatrix.block<3, 3>(0, 0);
+        this->hasSensorPose_ = true;
     }
 
-    void dynamicDetector::colorImgCB(const sensor_msgs::ImageConstPtr& img){
+    void dynamicDetector::colorImgCB(const sensor_msgs::msg::Image::ConstSharedPtr& img){
         cv_bridge::CvImagePtr imgPtr = cv_bridge::toCvCopy(img, img->encoding);
         imgPtr->image.copyTo(this->detectedColorImage_);
     }
 
-    void dynamicDetector::yoloDetectionCB(const vision_msgs::Detection2DArrayConstPtr& detections){
+    void dynamicDetector::yoloDetectionCB(const vision_msgs::msg::Detection2DArray::ConstSharedPtr& detections){
         this->yoloDetectionResults_ = *detections;
     }
 
    
-    void dynamicDetector::lidarDetectionCB(const ros::TimerEvent&){
+    void dynamicDetector::lidarDetectionCB(){
         this->lidarDetect();
     }
 
-    void dynamicDetector::detectionCB(const ros::TimerEvent&){
+    void dynamicDetector::detectionCB(){
         // detection thread
-        this->dbscanDetect();
-        this->uvDetect();
-        // ros::Time start = ros::Time::now();
+        if (not this->lidarOnly_){ // visual detection disabled in lidar only mode
+            this->dbscanDetect();
+            this->uvDetect();
+        }
         this->filterLVBBoxes();
-        // ros::Time end = ros::Time::now();
-        // ROS_INFO("filtering time: %f", (end - start).toSec());
         this->newDetectFlag_ = true; // get a new detection
     }
 
-    void dynamicDetector::trackingCB(const ros::TimerEvent&){
+    void dynamicDetector::trackingCB(){
         // data association thread
         std::vector<int> bestMatch; // for each current detection, which index of previous obstacle match
         this->boxAssociation(bestMatch);
@@ -1003,7 +1034,7 @@ namespace onboardDetector{
         }
     }
 
-    void dynamicDetector::classificationCB(const ros::TimerEvent&){
+    void dynamicDetector::classificationCB(){
         // Identification thread
         std::vector<onboardDetector::box3D> dynamicBBoxesTemp;
 
@@ -1125,7 +1156,7 @@ namespace onboardDetector{
                     double xdiff = std::abs(ob.x_width - targetSize(0));
                     double ydiff = std::abs(ob.y_width - targetSize(1));
                     double zdiff = std::abs(ob.z_width - targetSize(2)); 
-                    if (xdiff < 0.8 and ydiff < 0.8 and zdiff < 1.0){
+                    if (xdiff < 2.0 and ydiff < 2.0 and zdiff < 2.0){
                         findMatch = true;
                     }
                 }
@@ -1139,13 +1170,15 @@ namespace onboardDetector{
         this->dynamicBBoxes_ = dynamicBBoxesTemp;
     }
 
-    void dynamicDetector::visCB(const ros::TimerEvent&){
-        this->publishUVImages();
-        this->publishColorImages();
-        
-        this->publish3dBox(this->uvBBoxes_, this->uvBBoxesPub_, 0, 1, 0);
-        this->publish3dBox(this->dbBBoxes_, this->dbBBoxesPub_, 1, 0, 0);
-        this->publish3dBox(this->visualBBoxes_, this->visualBBoxesPub_, 0.3, 0.8, 1.0);
+    void dynamicDetector::visCB(){
+        if (not this->lidarOnly_){
+            this->publishUVImages();
+            this->publishColorImages();
+
+            this->publish3dBox(this->uvBBoxes_, this->uvBBoxesPub_, 0, 1, 0);
+            this->publish3dBox(this->dbBBoxes_, this->dbBBoxesPub_, 1, 0, 0);
+            this->publish3dBox(this->visualBBoxes_, this->visualBBoxesPub_, 0.3, 0.8, 1.0);
+        }
         this->publish3dBox(this->lidarBBoxes_, this->lidarBBoxesPub_, 0.5, 0.5, 0.5); // raw lidar cluster bounding boxes
         this->publish3dBox(this->filteredBBoxesBeforeYolo_, this->filteredBBoxesBeforeYoloPub_, 0, 1, 0.5);
         this->publish3dBox(this->filteredBBoxes_, this->filteredBBoxesPub_, 0, 1, 1);
@@ -1436,7 +1469,7 @@ namespace onboardDetector{
             std::vector<int> best3DBBoxForYOLO(this->yoloDetectionResults_.detections.size(), -1);
 
             // Project 2D bbox in color image plane from 3D
-            vision_msgs::Detection2DArray filteredDetectionResults;
+            vision_msgs::msg::Detection2DArray filteredDetectionResults;
             for (int j=0; j<int(filteredBBoxesTemp.size()); ++j){
                 onboardDetector::box3D bbox = filteredBBoxesTemp[j];
 
@@ -1456,9 +1489,9 @@ namespace onboardDetector{
                 int brX = (this->fxC_ * bottomright(0) + this->cxC_ * bottomright(2)) / bottomright(2);
                 int brY = (this->fyC_ * bottomright(1) + this->cyC_ * bottomright(2)) / bottomright(2);
 
-                vision_msgs::Detection2D result;
-                result.bbox.center.x = tlX;
-                result.bbox.center.y = tlY;
+                vision_msgs::msg::Detection2D result;
+                result.bbox.center.position.x = tlX;
+                result.bbox.center.position.y = tlY;
                 result.bbox.size_x = brX - tlX;
                 result.bbox.size_y = brY - tlY;
                 filteredDetectionResults.detections.push_back(result);
@@ -1472,8 +1505,8 @@ namespace onboardDetector{
             }
 
             for (int i=0; i<int(this->yoloDetectionResults_.detections.size()); ++i){
-                int tlXTarget = int(this->yoloDetectionResults_.detections[i].bbox.center.x);
-                int tlYTarget = int(this->yoloDetectionResults_.detections[i].bbox.center.y);
+                int tlXTarget = int(this->yoloDetectionResults_.detections[i].bbox.center.position.x);
+                int tlYTarget = int(this->yoloDetectionResults_.detections[i].bbox.center.position.y);
                 int brXTarget = tlXTarget + int(this->yoloDetectionResults_.detections[i].bbox.size_x);
                 int brYTarget = tlYTarget + int(this->yoloDetectionResults_.detections[i].bbox.size_y);
 
@@ -1501,8 +1534,8 @@ namespace onboardDetector{
                 double bestIOU = 0.0;
                 int bestIdx = -1;
                 for (int j = 0; j < int(filteredBBoxesTemp.size()); ++j) {
-                    int tlX = int(filteredDetectionResults.detections[j].bbox.center.x);
-                    int tlY = int(filteredDetectionResults.detections[j].bbox.center.y);
+                    int tlX = int(filteredDetectionResults.detections[j].bbox.center.position.x);
+                    int tlY = int(filteredDetectionResults.detections[j].bbox.center.position.y);
                     int brX = tlX + int(filteredDetectionResults.detections[j].bbox.size_x);
                     int brY = tlY + int(filteredDetectionResults.detections[j].bbox.size_y);
 
@@ -1577,8 +1610,8 @@ namespace onboardDetector{
 
                         int closestDist = std::numeric_limits<int>::max();
                         for (int yidx : yoloIndices){
-                            int XTarget = int(this->yoloDetectionResults_.detections[yidx].bbox.center.x);
-                            int YTarget = int(this->yoloDetectionResults_.detections[yidx].bbox.center.y);
+                            int XTarget = int(this->yoloDetectionResults_.detections[yidx].bbox.center.position.x);
+                            int YTarget = int(this->yoloDetectionResults_.detections[yidx].bbox.center.position.y);
                             int XTargetWid = int(this->yoloDetectionResults_.detections[yidx].bbox.size_x);
                             int YTargetWid = int(this->yoloDetectionResults_.detections[yidx].bbox.size_y);
                             int xMin = XTarget;
@@ -2306,22 +2339,22 @@ namespace onboardDetector{
     
     void dynamicDetector::publishUVImages(){
         if (this->uvDetector_ != NULL){
-            sensor_msgs::ImagePtr depthBoxMsg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", this->uvDetector_->depth_show).toImageMsg();
-            sensor_msgs::ImagePtr UmapBoxMsg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", this->uvDetector_->U_map_show).toImageMsg();
-            sensor_msgs::ImagePtr birdBoxMsg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", this->uvDetector_->bird_view).toImageMsg();  
-            this->uvDepthMapPub_.publish(depthBoxMsg);
-            this->uDepthMapPub_.publish(UmapBoxMsg); 
-            this->uvBirdViewPub_.publish(birdBoxMsg);
+            sensor_msgs::msg::Image::SharedPtr depthBoxMsg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", this->uvDetector_->depth_show).toImageMsg();
+            sensor_msgs::msg::Image::SharedPtr UmapBoxMsg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", this->uvDetector_->U_map_show).toImageMsg();
+            sensor_msgs::msg::Image::SharedPtr birdBoxMsg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", this->uvDetector_->bird_view).toImageMsg();  
+            this->uvDepthMapPub_->publish(*depthBoxMsg);
+            this->uDepthMapPub_->publish(*UmapBoxMsg); 
+            this->uvBirdViewPub_->publish(*birdBoxMsg);
         }     
     }
 
 
     void dynamicDetector::publishColorImages(){
-        sensor_msgs::ImagePtr detectedColorImgMsg = cv_bridge::CvImage(std_msgs::Header(), "rgb8", this->detectedColorImage_).toImageMsg();
-        this->detectedColorImgPub_.publish(detectedColorImgMsg);
+        sensor_msgs::msg::Image::SharedPtr detectedColorImgMsg = cv_bridge::CvImage(std_msgs::msg::Header(), "rgb8", this->detectedColorImage_).toImageMsg();
+        this->detectedColorImgPub_->publish(*detectedColorImgMsg);
     }
 
-    void dynamicDetector::publishPoints(const std::vector<Eigen::Vector3d>& points, const ros::Publisher& publisher){
+    void dynamicDetector::publishPoints(const std::vector<Eigen::Vector3d>& points, const rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr& publisher){
         pcl::PointXYZ pt;
         pcl::PointCloud<pcl::PointXYZ> cloud;        
         for (size_t i=0; i<points.size(); ++i){
@@ -2335,31 +2368,31 @@ namespace onboardDetector{
         cloud.is_dense = true;
         cloud.header.frame_id = "map";
 
-        sensor_msgs::PointCloud2 cloudMsg;
+        sensor_msgs::msg::PointCloud2 cloudMsg;
         pcl::toROSMsg(cloud, cloudMsg);
-        publisher.publish(cloudMsg);
+        publisher->publish(cloudMsg);
     }
 
 
     void dynamicDetector::publish3dBox(const std::vector<box3D>& boxes,
-                                   const ros::Publisher& publisher,
+                                   const rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr& publisher,
                                    double r, double g, double b){
-        visualization_msgs::MarkerArray markers;
+        visualization_msgs::msg::MarkerArray markers;
 
         for (size_t i = 0; i < boxes.size(); i++)
         {
-            visualization_msgs::Marker line;
+            visualization_msgs::msg::Marker line;
             line.header.frame_id = "map";
             line.ns = "box3D";
             line.id = i;
-            line.type = visualization_msgs::Marker::LINE_LIST;
-            line.action = visualization_msgs::Marker::ADD;
+            line.type = visualization_msgs::msg::Marker::LINE_LIST;
+            line.action = visualization_msgs::msg::Marker::ADD;
             line.scale.x = 0.06;
             line.color.r = r;
             line.color.g = g;
             line.color.b = b;
             line.color.a = 1.0;
-            line.lifetime = ros::Duration(0.05);
+            line.lifetime = rclcpp::Duration::from_seconds(0.05);
             line.pose.orientation.x = 0.0;
             line.pose.orientation.y = 0.0;
             line.pose.orientation.z = 0.0;
@@ -2373,7 +2406,7 @@ namespace onboardDetector{
             double z_width = top / 2.0;
             line.pose.position.z = z_width; 
 
-            geometry_msgs::Point corner[8];
+            geometry_msgs::msg::Point corner[8];
             corner[0].x = -x_width / 2.0; corner[0].y = -y_width / 2.0; corner[0].z = -z_width;
             corner[1].x = -x_width / 2.0; corner[1].y =  y_width / 2.0; corner[1].z = -z_width;
             corner[2].x =  x_width / 2.0; corner[2].y =  y_width / 2.0; corner[2].z = -z_width;
@@ -2399,21 +2432,21 @@ namespace onboardDetector{
             markers.markers.push_back(line);
         }
 
-        publisher.publish(markers);
+        publisher->publish(markers);
     }
 
 
     void dynamicDetector::publishHistoryTraj(){
-        visualization_msgs::MarkerArray trajMsg;
+        visualization_msgs::msg::MarkerArray trajMsg;
         int countMarker = 0;
         for (size_t i=0; i<this->boxHist_.size(); ++i){
             if (this->boxHist_[i].size() > 1){
-                visualization_msgs::Marker traj;
+                visualization_msgs::msg::Marker traj;
                 traj.header.frame_id = "map";
-                traj.header.stamp = ros::Time::now();
+                traj.header.stamp = this->now();
                 traj.ns = "dynamic_detector";
                 traj.id = countMarker;
-                traj.type = visualization_msgs::Marker::LINE_LIST;
+                traj.type = visualization_msgs::msg::Marker::LINE_LIST;
                 traj.scale.x = 0.03;
                 traj.scale.y = 0.03;
                 traj.scale.z = 0.03;
@@ -2426,7 +2459,7 @@ namespace onboardDetector{
                 traj.pose.orientation.y = 0.0;
                 traj.pose.orientation.z = 0.0;
                 for (size_t j=0; j<this->boxHist_[i].size()-1; ++j){
-                    geometry_msgs::Point p1, p2;
+                    geometry_msgs::msg::Point p1, p2;
                     onboardDetector::box3D box1 = this->boxHist_[i][j];
                     onboardDetector::box3D box2 = this->boxHist_[i][j+1];
                     p1.x = box1.x; p1.y = box1.y; p1.z = box1.z;
@@ -2439,19 +2472,19 @@ namespace onboardDetector{
                 trajMsg.markers.push_back(traj);
             }
         }
-        this->historyTrajPub_.publish(trajMsg);
+        this->historyTrajPub_->publish(trajMsg);
     }
 
     void dynamicDetector::publishVelVis(){ // publish velocities for all tracked objects
-        visualization_msgs::MarkerArray velVisMsg;
+        visualization_msgs::msg::MarkerArray velVisMsg;
         int countMarker = 0;
         for (size_t i=0; i<this->trackedBBoxes_.size(); ++i){
-            visualization_msgs::Marker velMarker;
+            visualization_msgs::msg::Marker velMarker;
             velMarker.header.frame_id = "map";
-            velMarker.header.stamp = ros::Time::now();
+            velMarker.header.stamp = this->now();
             velMarker.ns = "dynamic_detector";
             velMarker.id =  countMarker;
-            velMarker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+            velMarker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
             velMarker.pose.position.x = this->trackedBBoxes_[i].x;
             velMarker.pose.position.y = this->trackedBBoxes_[i].y;
             velMarker.pose.position.z = this->trackedBBoxes_[i].z + this->trackedBBoxes_[i].z_width/2. + 0.3;
@@ -2462,7 +2495,7 @@ namespace onboardDetector{
             velMarker.color.r = 1.0;
             velMarker.color.g = 0.0;
             velMarker.color.b = 0.0;
-            velMarker.lifetime = ros::Duration(0.1);
+            velMarker.lifetime = rclcpp::Duration::from_seconds(0.1);
             double vx = this->trackedBBoxes_[i].Vx;
             double vy = this->trackedBBoxes_[i].Vy;
             double vNorm = sqrt(vx*vx+vy*vy);
@@ -2471,16 +2504,16 @@ namespace onboardDetector{
             velVisMsg.markers.push_back(velMarker);
             ++countMarker;
         }
-        this->velVisPub_.publish(velVisMsg);
+        this->velVisPub_->publish(velVisMsg);
     }
 
     void dynamicDetector::publishLidarClusters(){
-        sensor_msgs::PointCloud2 lidarClustersMsg;
+        sensor_msgs::msg::PointCloud2 lidarClustersMsg;
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored_cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
         for (size_t i=0; i<this->lidarClusters_.size(); ++i){
             onboardDetector::Cluster & cluster = this->lidarClusters_[i];
 
-            std_msgs::ColorRGBA color;
+            std_msgs::msg::ColorRGBA color;
             srand(cluster.cluster_id);
             color.r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
             color.g = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
@@ -2504,15 +2537,15 @@ namespace onboardDetector{
         }
         pcl::toROSMsg(*colored_cloud, lidarClustersMsg);
         lidarClustersMsg.header.frame_id = "map";
-        lidarClustersMsg.header.stamp = ros::Time::now();
-        this->lidarClustersPub_.publish(lidarClustersMsg);
+        lidarClustersMsg.header.stamp = this->now();
+        this->lidarClustersPub_->publish(lidarClustersMsg);
     }
 
     void dynamicDetector::publishFilteredPoints(){
-        sensor_msgs::PointCloud2 filteredPointsMsg;
+        sensor_msgs::msg::PointCloud2 filteredPointsMsg;
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored_cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
         for (size_t i=0; i<this->filteredPcClusters_.size(); ++i){
-            std_msgs::ColorRGBA color;
+            std_msgs::msg::ColorRGBA color;
             color.r = 0.5;
             color.g = 0.5;
             color.b = 0.5;
@@ -2531,8 +2564,8 @@ namespace onboardDetector{
         }
         pcl::toROSMsg(*colored_cloud, filteredPointsMsg);
         filteredPointsMsg.header.frame_id = "map";
-        filteredPointsMsg.header.stamp = ros::Time::now();
-        this->filteredPointsPub_.publish(filteredPointsMsg);
+        filteredPointsMsg.header.stamp = this->now();
+        this->filteredPointsPub_->publish(filteredPointsMsg);
     }
 
     void dynamicDetector::publishRawDynamicPoints(){
@@ -2550,11 +2583,11 @@ namespace onboardDetector{
                 transform.translation() = this->positionLidar_;
                 
                 pcl::transformPointCloud(*tempCloud, *globalCloud, transform);
-                sensor_msgs::PointCloud2 cloudMsg;
+                sensor_msgs::msg::PointCloud2 cloudMsg;
                 pcl::toROSMsg(*globalCloud, cloudMsg);
                 cloudMsg.header.frame_id = "map";
-                cloudMsg.header.stamp = ros::Time::now();
-                this->rawLidarPointsPub_.publish(cloudMsg);
+                cloudMsg.header.stamp = this->now();
+                this->rawLidarPointsPub_->publish(cloudMsg);
             }
             else {
                 pcl::fromROSMsg(*this->latestCloud_, *globalCloud);
@@ -2590,13 +2623,13 @@ namespace onboardDetector{
             this->publishPoints(dynamicEigenPoints, this->rawDynamicPointsPub_);
         }
         catch (const pcl::PCLException& e) {
-            ROS_ERROR("PCL Exception during dynamic point extraction: %s", e.what());
+            RCLCPP_ERROR(this->get_logger(), "PCL Exception during dynamic point extraction: %s", e.what());
         }
         catch (const std::exception& e) {
-            ROS_ERROR("Standard Exception during dynamic point extraction: %s", e.what());
+            RCLCPP_ERROR(this->get_logger(), "Standard Exception during dynamic point extraction: %s", e.what());
         }
         catch (...) {
-            ROS_ERROR("Unknown error during dynamic point extraction.");
+            RCLCPP_ERROR(this->get_logger(), "Unknown error during dynamic point extraction.");
         }
     }
 
