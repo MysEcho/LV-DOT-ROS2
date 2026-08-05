@@ -77,6 +77,10 @@ install(TARGETS ${PROJECT_NAME}_lib
 install(TARGETS detector_node
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
+install(PROGRAMS scripts/dynamic_cloud_filter.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(DIRECTORY include/
   DESTINATION include
 )

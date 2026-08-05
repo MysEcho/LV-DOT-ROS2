@@ -8,13 +8,16 @@
     localization_mode: 1 # 0: pose (default) 1: odom
 
     # ROS Topics
-    # Defaults target a FAST-LIO2 odometry stack: the undistorted body-frame cloud
-    # (/cloud_registered_body) is paired with /Odometry, so body_to_lidar stays identity.
+    # Raw right-lidar cloud (sensor frame) paired with wheel-encoder odometry
+    # (/odom, swerve controller in bringup; pose of base_link in the odom frame),
+    # so body_to_lidar below is the URDF base_link->right_lidar mount.
+    # (.11 = right lidar per the bringup/merger convention.)
+    # FAST-LIO alternative: /cloud_registered_body + /Odometry + identity.
     depth_image_topic: /camera/depth/image_rect_raw
     color_image_topic: /camera/color/image_raw
-    lidar_pointcloud_topic: /cloud_registered_body
+    lidar_pointcloud_topic: /livox/lidar_192_168_1_11
     pose_topic: /mavros/local_position/pose
-    odom_topic: /Odometry
+    odom_topic: /odom
 
     # Camera Parameters (unused in lidar_only mode)
     depth_intrinsics: [385.3096008300781, 385.3096008300781, 324.7971496582031, 237.722900390625] # fx,  fy, cx, cy realsense
@@ -36,20 +39,23 @@
                           -1.0,  0.0,  0.0,  0.0,
                            0.0, -1.0,  0.0,  0.095,
                            0.0,  0.0,  0.0,  1.0]
-    # /cloud_registered_body is already expressed in the odometry body (IMU) frame
-    body_to_lidar:  [1.0,  0.0,  0.0,  0.0,
-                     0.0,  1.0,  0.0,  0.0,
-                     0.0,  0.0,  1.0,  0.0,
-                     0.0,  0.0,  0.0,  1.0]
+    # T_base_link<-right_lidar from the URDF: base_link -> base_plate_link
+    # (z +0.085) -> right_lidar (xyz -0.215 0.215 0.363, rpy 0 0.349 2.35619).
+    # Maps raw right-lidar sensor-frame points into base_link, the frame whose
+    # pose /odom reports. (Use identity when input is /cloud_registered_body.)
+    body_to_lidar:  [-0.664476, -0.707110, -0.241800, -0.215,
+                      0.664482, -0.707104,  0.241802,  0.215,
+                     -0.341958,  0.0,       0.939715,  0.448,
+                      0.0,       0.0,       0.0,       1.0]
 
     # System
     time_step: 0.033
 
     # DBSCAN Common
-    # NOTE: heights are in the odometry world frame. FAST-LIO's world origin sits at the
-    # IMU's initial pose (~0.4 m above the floor on the TCR base), so the floor is at
-    # negative z. Adjust for your mount height.
-    ground_height: -0.2 # points below this z are treated as ground and removed
+    # NOTE: heights are in the odometry world frame. With wheel odom the world
+    # is anchored at base_link's start pose, so the floor sits at z ~= 0
+    # (use -0.2 with FAST-LIO's camera_init world at IMU height).
+    ground_height: 0.15 # points below this z are treated as ground and removed
     roof_height: 1.8 # points above this z are treated as roof/ceiling and removed
 
     # DBSCAN visual param
